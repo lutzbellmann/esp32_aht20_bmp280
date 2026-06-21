@@ -1,6 +1,5 @@
 version: "0.1.0"
 description: "AHT20 (temperature/humidity) + BMP280 (pressure) I2C sensor driver for ESP32, built on the ESP-IDF I2C master driver"
-# TODO: an dein tatsächliches Repo anpassen, sobald es auf GitHub liegt
 url: "https://github.com/lutzbellmann/esp32_aht20_bmp280"
 repository: "https://github.com/lutzbellmann/esp32_aht20_bmp280.git"
 license: "Apache-2.0"

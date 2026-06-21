@@ -1,0 +1,19 @@
+name: Push component to ESP Component Registry
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "idf_component.yml"
+
+jobs:
+  upload_component:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Upload component to the registry
+        uses: espressif/upload-components-ga-action@v2
+        with:
+          namespace: "lutzbellmann"
+          api_token: ${{ secrets.IDF_COMPONENT_API_TOKEN }}
