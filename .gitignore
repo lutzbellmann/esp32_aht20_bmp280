@@ -1,0 +1,7 @@
+.claude/settings.local.json
+sdkconfig
+sdkconfig.old
+build/
+managed_components/
+dependencies.lock
+.cache/

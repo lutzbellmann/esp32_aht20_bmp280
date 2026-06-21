@@ -16,7 +16,7 @@ Or add it manually to your `main/idf_component.yml`:
 
 ```yaml
 dependencies:
-  lbellmann/esp32_aht20_bmp280: "^0.1.0"
+  lutzbellmann/esp32_aht20_bmp280: "^0.1.0"
 ```
 
 ## Usage

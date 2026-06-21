@@ -8,6 +8,7 @@ every 2 seconds and logs the result.
 - AHT20 + BMP280 on the same I2C bus
 - SDA → GPIO21, SCL → GPIO22 (change `EXAMPLE_I2C_SDA_GPIO`/`EXAMPLE_I2C_SCL_GPIO` in `main/main.c` if needed)
 - BMP280 SDO pin tied to GND (uses `ENV_SENSOR_BMP280_ADDR_LOW`; switch to `ENV_SENSOR_BMP280_ADDR_HIGH` if SDO is tied to VCC)
+- most AHT20/BMP280 modules on marketplaces use `ENV_SENSOR_BMP280_ADDR_HIGH`
 
 ## Build and flash
 
