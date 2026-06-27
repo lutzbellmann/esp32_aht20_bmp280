@@ -9,14 +9,14 @@ Requires **ESP-IDF >= 5.2**.
 ## Installation
 
 ```bash
-idf.py add-dependency "lutzbellmann/esp32_aht20_bmp280^0.2.0"
+idf.py add-dependency "lutzbellmann/esp32_aht20_bmp280^0.2.1"
 ```
 
 Or add it manually to your `main/idf_component.yml`:
 
 ```yaml
 dependencies:
-  lutzbellmann/esp32_aht20_bmp280: "^0.2.0"
+  lutzbellmann/esp32_aht20_bmp280: "^0.2.1"
 ```
 
 ## Configuration
