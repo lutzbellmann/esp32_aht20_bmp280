@@ -4,9 +4,6 @@
 #include <driver/i2c_master.h>
 #include <driver/gpio.h>
 
-#define ENV_SENSOR_BMP280_ADDR_LOW   0x76   /* SDO pin → GND */
-#define ENV_SENSOR_BMP280_ADDR_HIGH  0x77   /* SDO pin → VCC */
-
 typedef struct {
     float temperature;  /* °C  — from AHT20 */
     float humidity;     /* %RH — from AHT20 */
@@ -29,18 +26,15 @@ typedef struct {
  *
  * Convenience wrapper — skip if a bus already exists.
  */
-esp_err_t env_sensor_create_bus(gpio_num_t sda, gpio_num_t scl,
-                                 i2c_port_num_t port, i2c_master_bus_handle_t *bus_out);
+esp_err_t env_sensor_create_bus(i2c_port_num_t port, i2c_master_bus_handle_t *bus_out);
 
 /**
  * @brief Initialize AHT20 and BMP280 on an existing I2C bus.
  *
  * @param bus         I2C master bus handle
- * @param bmp280_addr ENV_SENSOR_BMP280_ADDR_LOW or ENV_SENSOR_BMP280_ADDR_HIGH
  * @param handle      Handle to populate (caller-allocated)
  */
-esp_err_t env_sensor_init(i2c_master_bus_handle_t bus, uint8_t bmp280_addr,
-                           env_sensor_t *handle);
+esp_err_t env_sensor_init(i2c_master_bus_handle_t bus, env_sensor_t *handle);
 
 /**
  * @brief Trigger a measurement and return temperature, humidity, and pressure.

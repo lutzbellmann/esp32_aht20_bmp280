@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "WebFetch(domain:files.seeedstudio.com)",
+      "WebFetch(domain:www.bosch-sensortec.com)",
+      "Bash(find /root/.claude/projects/-workspaces-projects-esp32-aht20-bmp280 -iname \"*.pdf\" -newer /tmp 2>/dev/null; find /root/.claude/projects/-workspaces-projects-esp32-aht20-bmp280 -iname \"*.pdf\")",
+      "Read(//tmp/**)",
+      "Bash(python3 -c \"import fitz\")",
+      "Bash(python3 -c \"import PyPDF2\")",
+      "Bash(python3 -c \"import pdfminer\")",
+      "Bash(sudo apt-get install -y poppler-utils)",
+      "Bash(apt-get install *)",
+      "Bash(apt-get update *)",
+      "Bash(pdftotext -layout webfetch-1782058501160-2xr4l5.pdf aht20.txt)",
+      "Bash(pdftotext -layout webfetch-1782058501439-doxpaa.pdf bmp280.txt)",
+      "Read(//opt/espressif/esp-idf/tools/cmake/**)",
+      "Bash(git -C /workspaces/projects/esp32_aht20_bmp280 log --oneline --all -- kconfig.projbuild)",
+      "Bash(git -C /workspaces/projects/esp32_aht20_bmp280 log -p --follow -- kconfig.projbuild)",
+      "Bash(git -C /workspaces/projects/esp32_aht20_bmp280 status --short)",
+      "Bash(git -C /workspaces/projects/esp32_aht20_bmp280 diff README.md examples/basic/main/idf_component.yml)",
+      "Bash(mv kconfig.projbuild Kconfig.projbuild && ls -la Kconfig.projbuild)",
+      "Bash(idf.py reconfigure *)",
+      "Bash(python3 -c ' *)"
+    ],
+    "additionalDirectories": [
+      "/workspaces/projects/esp32_aht20_bmp280"
+    ]
+  }
+}

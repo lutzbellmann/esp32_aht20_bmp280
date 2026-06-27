@@ -5,6 +5,20 @@
 
 static const char *TAG = "env_sensor";
 
+#if CONFIG_BMP280_I2C_ADDRESS_0x76
+#define BMP280_ADDR 0x76
+#else
+#define BMP280_ADDR 0x77
+#endif
+
+#define SCL_PIN CONFIG_I2C_SCL_PIN
+#define SDA_PIN CONFIG_I2C_SDA_PIN
+
+#if CONFIG_POWER_IS_GPIO
+#define POWER_PIN CONFIG_POWER_GPIO_PIN
+#endif
+
+
 /* ──────────────────────────── AHT20 ──────────────────────────── */
 
 #define AHT20_ADDR          0x38
@@ -162,15 +176,31 @@ static esp_err_t bmp280_read(i2c_master_dev_handle_t dev, env_sensor_t *h, float
     return ESP_OK;
 }
 
+void read_task(void *arg)
+{
+    env_sensor_t *handle = (env_sensor_t *)arg;
+    env_sensor_reading_t reading;
+
+    while (1) {
+        esp_err_t ret = env_sensor_read(handle, &reading);
+        if (ret == ESP_OK) {
+            ESP_LOGI(TAG, "Temperature: %.2f °C, Humidity: %.2f %%RH, Pressure: %.2f hPa",
+                     reading.temperature, reading.humidity, reading.pressure);
+        } else {
+            ESP_LOGE(TAG, "Failed to read sensor data: %s", esp_err_to_name(ret));
+        }
+        vTaskDelay(pdMS_TO_TICKS(1000));  // Read every second
+    }
+}
+
 /* ──────────────────────────── Public API ──────────────────────── */
 
-esp_err_t env_sensor_create_bus(gpio_num_t sda, gpio_num_t scl,
-                                 i2c_port_num_t port, i2c_master_bus_handle_t *bus_out)
+esp_err_t env_sensor_create_bus(i2c_port_num_t port, i2c_master_bus_handle_t *bus_out)
 {
     i2c_master_bus_config_t cfg = {
         .i2c_port          = port,
-        .sda_io_num        = sda,
-        .scl_io_num        = scl,
+        .sda_io_num        = SDA_PIN,
+        .scl_io_num        = SCL_PIN,
         .clk_source        = I2C_CLK_SRC_DEFAULT,
         .glitch_ignore_cnt = 7,
         .flags.enable_internal_pullup = true,
@@ -178,9 +208,23 @@ esp_err_t env_sensor_create_bus(gpio_num_t sda, gpio_num_t scl,
     return i2c_new_master_bus(&cfg, bus_out);
 }
 
-esp_err_t env_sensor_init(i2c_master_bus_handle_t bus, uint8_t bmp280_addr,
-                           env_sensor_t *handle)
+esp_err_t env_sensor_init(i2c_master_bus_handle_t bus, env_sensor_t *handle)
 {
+    #if CONFIG_POWER_IS_GPIO
+    /* Optional power control via GPIO; skip if not configured. */
+    gpio_config_t io_conf = {
+        .pin_bit_mask = 1ULL << POWER_PIN,
+        .mode         = GPIO_MODE_OUTPUT,
+        .pull_up_en   = GPIO_PULLUP_DISABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type    = GPIO_INTR_DISABLE,
+    };
+    esp_err_t ret = gpio_config(&io_conf);
+    if (ret != ESP_OK) return ret;
+    gpio_set_level(POWER_PIN, 1);
+    //vTaskDelay(pdMS_TO_TICKS(40)); /* allow sensors to power up */
+    #endif
+
     i2c_device_config_t aht20_cfg = {
         .dev_addr_length = I2C_ADDR_BIT_LEN_7,
         .device_address  = AHT20_ADDR,
@@ -191,7 +235,7 @@ esp_err_t env_sensor_init(i2c_master_bus_handle_t bus, uint8_t bmp280_addr,
 
     i2c_device_config_t bmp_cfg = {
         .dev_addr_length = I2C_ADDR_BIT_LEN_7,
-        .device_address  = bmp280_addr,
+        .device_address  = BMP280_ADDR,
         .scl_speed_hz    = 400000,
     };
     ret = i2c_master_bus_add_device(bus, &bmp_cfg, &handle->bmp280);
@@ -219,6 +263,14 @@ cleanup:
     i2c_master_bus_rm_device(handle->bmp280);
     return ret;
 }
+#if CONFIG_POWER_IS_GPIO
+
+esp_err_t env_sensor_init_auto_read(i2c_master_bus_handle_t bus, env_sensor_t *handle, env_sensor_reading_t *out)
+{
+    esp_err_t ret = env_sensor_init(bus, handle);
+    if (ret != ESP_OK) return ret;
+    return env_sensor_read(handle, out);
+}
 
 esp_err_t env_sensor_read(env_sensor_t *handle, env_sensor_reading_t *out)
 {
@@ -227,3 +279,5 @@ esp_err_t env_sensor_read(env_sensor_t *handle, env_sensor_reading_t *out)
 
     return bmp280_read(handle->bmp280, handle, &out->pressure);
 }
+
+#endif

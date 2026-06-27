@@ -2,22 +2,18 @@
 #include <freertos/task.h>
 #include <esp_log.h>
 #include "env_sensor.h"
-#include "soc/gpio_num.h"
 
-#define EXAMPLE_I2C_SDA_GPIO GPIO_NUM_4
-#define EXAMPLE_I2C_SCL_GPIO GPIO_NUM_5
-#define EXAMPLE_I2C_PORT     0
+    #define EXAMPLE_I2C_PORT     0
 
 static const char *TAG = "env_sensor_example";
 
 void app_main(void)
 {
     i2c_master_bus_handle_t bus;
-    ESP_ERROR_CHECK(env_sensor_create_bus(EXAMPLE_I2C_SDA_GPIO, EXAMPLE_I2C_SCL_GPIO,
-                                           EXAMPLE_I2C_PORT, &bus));
+    ESP_ERROR_CHECK(env_sensor_create_bus(EXAMPLE_I2C_PORT, &bus));
 
     env_sensor_t sensor;
-    ESP_ERROR_CHECK(env_sensor_init(bus, ENV_SENSOR_BMP280_ADDR_HIGH, &sensor));
+    ESP_ERROR_CHECK(env_sensor_init(bus, &sensor));
 
     while (1) {
         env_sensor_reading_t reading;
@@ -28,6 +24,6 @@ void app_main(void)
         } else {
             ESP_LOGW(TAG, "read failed: %s", esp_err_to_name(ret));
         }
-        vTaskDelay(pdMS_TO_TICKS(2000));
+        vTaskDelay(pdMS_TO_TICKS(5000));
     }
 }
