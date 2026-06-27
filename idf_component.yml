@@ -1,4 +1,4 @@
-version: "0.1.1"
+version: "0.2.0"
 description: "AHT20 (temperature/humidity) + BMP280 (pressure) I2C sensor driver for ESP32, built on the ESP-IDF I2C master driver"
 url: "https://github.com/lutzbellmann/esp32_aht20_bmp280"
 repository: "https://github.com/lutzbellmann/esp32_aht20_bmp280.git"
@@ -11,6 +11,7 @@ tags:
   - bmp280
 examples:
   - path: "./examples/basic"
+  - path: "./examples/env_async"
 dependencies:
   idf:
     version: ">=5.2"
