@@ -3,14 +3,12 @@
 #include <esp_log.h>
 #include "env_sensor.h"
 
-    #define EXAMPLE_I2C_PORT     0
-
 static const char *TAG = "env_sensor_example";
 
 void app_main(void)
 {
     i2c_master_bus_handle_t bus;
-    ESP_ERROR_CHECK(env_sensor_create_bus(EXAMPLE_I2C_PORT, &bus));
+    ESP_ERROR_CHECK(env_sensor_create_bus(&bus));
 
     env_sensor_t sensor;
     ESP_ERROR_CHECK(env_sensor_init(bus, &sensor));

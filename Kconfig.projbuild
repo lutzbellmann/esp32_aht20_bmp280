@@ -24,6 +24,11 @@ menu "AHT20+BMP280 Sensor configuration"
         default 5
         range 0 36
     
+    config I2C_BUS
+        int "The number of I2C bus"
+        default 0
+        range 0 1
+
     choice "BMP280_I2C_ADDRESS"
         prompt "Select BMP280 I2C address"
         help

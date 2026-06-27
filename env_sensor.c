@@ -3,7 +3,6 @@
 #include <freertos/task.h>
 #include <esp_log.h>
 
-static const char *TAG = "env_sensor";
 
 #if CONFIG_BMP280_I2C_ADDRESS_0x76
 #define BMP280_ADDR 0x76
@@ -13,11 +12,18 @@ static const char *TAG = "env_sensor";
 
 #define SCL_PIN CONFIG_I2C_SCL_PIN
 #define SDA_PIN CONFIG_I2C_SDA_PIN
+#define I2C_BUS CONFIG_I2C_BUS
 
 #if CONFIG_POWER_IS_GPIO
 #define POWER_PIN CONFIG_POWER_GPIO_PIN
 #endif
 
+static const char *TAG = "env_sensor";
+int read_freq;
+env_sensor_reading_t env_sensor_last_reading;
+i2c_master_bus_handle_t bus_local;
+static TaskHandle_t s_read_task_handle = NULL;
+static volatile bool s_stop_requested = false;
 
 /* ──────────────────────────── AHT20 ──────────────────────────── */
 
@@ -178,27 +184,34 @@ static esp_err_t bmp280_read(i2c_master_dev_handle_t dev, env_sensor_t *h, float
 
 void read_task(void *arg)
 {
-    env_sensor_t *handle = (env_sensor_t *)arg;
-    env_sensor_reading_t reading;
-
+    i2c_master_bus_handle_t bus = (i2c_master_bus_handle_t)arg;
+    env_sensor_t sensor;
     while (1) {
-        esp_err_t ret = env_sensor_read(handle, &reading);
+        if (s_stop_requested) {
+            s_stop_requested = false;
+            s_read_task_handle = NULL;
+            vTaskDelete(NULL);
+        }
+        ESP_ERROR_CHECK(env_sensor_poweron());
+        ESP_ERROR_CHECK(env_sensor_init(bus, &sensor));
+        esp_err_t ret = env_sensor_read(&sensor, &env_sensor_last_reading);
         if (ret == ESP_OK) {
             ESP_LOGI(TAG, "Temperature: %.2f °C, Humidity: %.2f %%RH, Pressure: %.2f hPa",
-                     reading.temperature, reading.humidity, reading.pressure);
+                     env_sensor_last_reading.temperature, env_sensor_last_reading.humidity, env_sensor_last_reading.pressure);
         } else {
             ESP_LOGE(TAG, "Failed to read sensor data: %s", esp_err_to_name(ret));
         }
-        vTaskDelay(pdMS_TO_TICKS(1000));  // Read every second
+        ESP_ERROR_CHECK(env_sensor_poweroff());
+        ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(read_freq));  // sleep, but wake immediately if a stop is requested
     }
 }
 
 /* ──────────────────────────── Public API ──────────────────────── */
 
-esp_err_t env_sensor_create_bus(i2c_port_num_t port, i2c_master_bus_handle_t *bus_out)
+esp_err_t env_sensor_create_bus(i2c_master_bus_handle_t *bus_out)
 {
     i2c_master_bus_config_t cfg = {
-        .i2c_port          = port,
+        .i2c_port          = I2C_BUS,
         .sda_io_num        = SDA_PIN,
         .scl_io_num        = SCL_PIN,
         .clk_source        = I2C_CLK_SRC_DEFAULT,
@@ -208,29 +221,17 @@ esp_err_t env_sensor_create_bus(i2c_port_num_t port, i2c_master_bus_handle_t *bu
     return i2c_new_master_bus(&cfg, bus_out);
 }
 
+
+
 esp_err_t env_sensor_init(i2c_master_bus_handle_t bus, env_sensor_t *handle)
 {
-    #if CONFIG_POWER_IS_GPIO
-    /* Optional power control via GPIO; skip if not configured. */
-    gpio_config_t io_conf = {
-        .pin_bit_mask = 1ULL << POWER_PIN,
-        .mode         = GPIO_MODE_OUTPUT,
-        .pull_up_en   = GPIO_PULLUP_DISABLE,
-        .pull_down_en = GPIO_PULLDOWN_DISABLE,
-        .intr_type    = GPIO_INTR_DISABLE,
-    };
-    esp_err_t ret = gpio_config(&io_conf);
-    if (ret != ESP_OK) return ret;
-    gpio_set_level(POWER_PIN, 1);
-    //vTaskDelay(pdMS_TO_TICKS(40)); /* allow sensors to power up */
-    #endif
-
+    esp_err_t ret;
     i2c_device_config_t aht20_cfg = {
         .dev_addr_length = I2C_ADDR_BIT_LEN_7,
         .device_address  = AHT20_ADDR,
         .scl_speed_hz    = 400000,
     };
-    esp_err_t ret = i2c_master_bus_add_device(bus, &aht20_cfg, &handle->aht20);
+    ret = i2c_master_bus_add_device(bus, &aht20_cfg, &handle->aht20);
     if (ret != ESP_OK) return ret;
 
     i2c_device_config_t bmp_cfg = {
@@ -265,12 +266,57 @@ cleanup:
 }
 #if CONFIG_POWER_IS_GPIO
 
-esp_err_t env_sensor_init_auto_read(i2c_master_bus_handle_t bus, env_sensor_t *handle, env_sensor_reading_t *out)
+esp_err_t env_sensor_init_auto_read(i2c_master_bus_handle_t bus, int read_wait)
 {
-    esp_err_t ret = env_sensor_init(bus, handle);
-    if (ret != ESP_OK) return ret;
-    return env_sensor_read(handle, out);
+    if (s_read_task_handle != NULL) return ESP_ERR_INVALID_STATE;
+
+    read_freq = read_wait;
+    s_stop_requested = false;
+    BaseType_t ret = xTaskCreate(read_task, "env_sensor_read_task", 4096, bus, 5, &s_read_task_handle);
+    return (ret == pdPASS) ? ESP_OK : ESP_FAIL;
 }
+
+esp_err_t env_sensor_stop_auto_read(i2c_master_bus_handle_t bus)
+{
+    if (s_read_task_handle == NULL) return ESP_ERR_INVALID_STATE;
+
+    s_stop_requested = true;
+    xTaskNotifyGive(s_read_task_handle);
+
+    /* read_task clears the handle right before it deletes itself */
+    while (s_read_task_handle != NULL) {
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+    return ESP_OK;
+}
+
+esp_err_t env_sensor_poweron()
+{
+    static bool configured = false;
+    if (!configured) {
+        gpio_config_t io_conf = {
+            .pin_bit_mask = 1ULL << POWER_PIN,
+            .mode         = GPIO_MODE_OUTPUT,
+            .pull_up_en   = GPIO_PULLUP_DISABLE,
+            .pull_down_en = GPIO_PULLDOWN_DISABLE,
+            .intr_type    = GPIO_INTR_DISABLE,
+        };
+        esp_err_t ret = gpio_config(&io_conf);
+        if (ret != ESP_OK) return ret;
+        configured = true;
+    }
+
+    gpio_set_level(POWER_PIN, 1);
+    vTaskDelay(pdMS_TO_TICKS(40)); /* allow sensors to power up */
+    return ESP_OK;
+}
+
+esp_err_t env_sensor_poweroff() 
+{
+    gpio_set_level(POWER_PIN, 0);
+    return ESP_OK;
+}
+#endif
 
 esp_err_t env_sensor_read(env_sensor_t *handle, env_sensor_reading_t *out)
 {
@@ -280,4 +326,3 @@ esp_err_t env_sensor_read(env_sensor_t *handle, env_sensor_reading_t *out)
     return bmp280_read(handle->bmp280, handle, &out->pressure);
 }
 
-#endif
