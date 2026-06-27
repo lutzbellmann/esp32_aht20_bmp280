@@ -16,14 +16,16 @@
 
 #if CONFIG_POWER_IS_GPIO
 #define POWER_PIN CONFIG_POWER_GPIO_PIN
+static TaskHandle_t s_read_task_handle = NULL;
+static volatile bool s_stop_requested = false;
+int read_freq;
+env_sensor_reading_t env_sensor_last_reading;
 #endif
 
 static const char *TAG = "env_sensor";
-int read_freq;
-env_sensor_reading_t env_sensor_last_reading;
+
 i2c_master_bus_handle_t bus_local;
-static TaskHandle_t s_read_task_handle = NULL;
-static volatile bool s_stop_requested = false;
+
 
 /* ──────────────────────────── AHT20 ──────────────────────────── */
 
@@ -182,30 +184,42 @@ static esp_err_t bmp280_read(i2c_master_dev_handle_t dev, env_sensor_t *h, float
     return ESP_OK;
 }
 
+#if CONFIG_POWER_IS_GPIO
+
 void read_task(void *arg)
 {
     i2c_master_bus_handle_t bus = (i2c_master_bus_handle_t)arg;
     env_sensor_t sensor;
+    esp_err_t ret;
     while (1) {
         if (s_stop_requested) {
             s_stop_requested = false;
             s_read_task_handle = NULL;
             vTaskDelete(NULL);
         }
-        ESP_ERROR_CHECK(env_sensor_poweron());
-        ESP_ERROR_CHECK(env_sensor_init(bus, &sensor));
-        esp_err_t ret = env_sensor_read(&sensor, &env_sensor_last_reading);
+        ret = env_sensor_poweron();
+        if (ret != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to power on sensor: %s", esp_err_to_name(ret));
+        }
+        ret = env_sensor_init(bus, &sensor);
+        if (ret != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to initialize sensor: %s", esp_err_to_name(ret));
+        }
+        ret = env_sensor_read(&sensor, &env_sensor_last_reading);
         if (ret == ESP_OK) {
             ESP_LOGI(TAG, "Temperature: %.2f °C, Humidity: %.2f %%RH, Pressure: %.2f hPa",
                      env_sensor_last_reading.temperature, env_sensor_last_reading.humidity, env_sensor_last_reading.pressure);
         } else {
             ESP_LOGE(TAG, "Failed to read sensor data: %s", esp_err_to_name(ret));
         }
-        ESP_ERROR_CHECK(env_sensor_poweroff());
+        ret = env_sensor_poweroff();
+        if (ret != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to power off sensor: %s", esp_err_to_name(ret));
+        }
         ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(read_freq));  // sleep, but wake immediately if a stop is requested
     }
 }
-
+#endif
 /* ──────────────────────────── Public API ──────────────────────── */
 
 esp_err_t env_sensor_create_bus(i2c_master_bus_handle_t *bus_out)

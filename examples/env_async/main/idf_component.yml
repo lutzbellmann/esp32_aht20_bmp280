@@ -1,0 +1,6 @@
+dependencies:
+  lutzbellmann/esp32_aht20_bmp280:
+    version: "*"
+    # Uncomment to build against the local component sources while developing,
+    # instead of a version published to the registry:
+    override_path: "../../.."
